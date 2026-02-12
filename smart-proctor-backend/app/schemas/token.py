@@ -6,5 +6,6 @@ class Token(BaseModel):
     token_type: str
 
 class TokenPayload(BaseModel):
-    sub: Optional[str] = None
-    exp: Optional[int] = None
+    # We enforce that the subject (User ID) must be an integer,
+    # matching the primary key in your PostgreSQL database.
+    sub: Optional[int] = None

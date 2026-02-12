@@ -1,2 +1,5 @@
-# app/services/__init__.py
-from .honeypot import verify_honeypot, check_llm_poisoning, check_watermark
+from .honeypot import honeypot_service
+
+# This allows you to do:
+# from app.services import honeypot_service
+# honeypot_service.check_llm_poisoning(...)

@@ -1,127 +1,71 @@
 # ---------------------------------------------------------
 # GLOBAL / OS FILES
 # ---------------------------------------------------------
-# macOS junk
 .DS_Store
 .AppleDouble
 .LSOverride
-
-# Windows junk
 Thumbs.db
 ehthumbs.db
 Desktop.ini
-
-# Linux junk
 *~
 
-# Editor Directories (VS Code, JetBrains, etc.)
+# ---------------------------------------------------------
+# EDITOR / IDE
+# ---------------------------------------------------------
 .idea/
 .vscode/
 *.swp
 *.swo
 
 # ---------------------------------------------------------
+# DOCKER & ENVIRONMENT SECRETS (CRITICAL)
+# ---------------------------------------------------------
+# Ignore all .env files in any directory
+.env
+.env.*
+!.env.example
+docker-compose.override.yml
+
+# ---------------------------------------------------------
 # PYTHON BACKEND (verifai-backend)
 # ---------------------------------------------------------
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual Environments
-venv/
-env/
-.env
-.venv
-
-# Distribution / Packaging
-dist/
-build/
-*.egg-info/
-
-# Unit Test / Coverage reports
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Database (SQLite if used locally)
-*.sqlite3
-*.db
-
-# Scrapy / Crawler stuff (if added later)
-.scrapy
-
-# MyPy (Static Type Checker)
-.mypy_cache/
+verifai-backend/__pycache__/
+verifai-backend/*.py[cod]
+verifai-backend/*$py.class
+verifai-backend/venv/
+verifai-backend/.venv/
+verifai-backend/htmlcov/
+verifai-backend/.coverage
+verifai-backend/.pytest_cache/
 
 # ---------------------------------------------------------
 # GO BOUNCER (verifai-bouncer)
 # ---------------------------------------------------------
-# Binaries (The compiled executable)
-# We name it 'main' in the tutorial, but block strictly to be safe.
-main
-main.exe
-verifai-bouncer
-verifai-bouncer.exe
-
-# Vendor directory (If you aren't committing dependencies)
-# vendor/
-
-# Go test output
-*.out
-*.test
+# Binaries (Compiled Executables)
+verifai-bouncer/main
+verifai-bouncer/bouncer
+verifai-bouncer/*.exe
+verifai-bouncer/*.test
+verifai-bouncer/*.out
 
 # ---------------------------------------------------------
 # NEXT.JS FRONTEND (verifai-frontend)
 # ---------------------------------------------------------
-# Dependencies
-node_modules/
-.pnp
-.pnp.js
-
-# Testing
-coverage/
-
-# Next.js build output
-.next/
-out/
-
-# Production build output
-build/
-dist/
-
-# Environment variables
-# (Be very careful not to commit these!)
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Debug logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# Vercel (Deployment config)
-.vercel/
-
-# TypeScript
-*.tsbuildinfo
-next-env.d.ts
+verifai-frontend/node_modules/
+verifai-frontend/.next/
+verifai-frontend/build/
+verifai-frontend/dist/
+verifai-frontend/coverage/
+verifai-frontend/.vercel/
+verifai-frontend/*.tsbuildinfo
+verifai-frontend/next-env.d.ts
+verifai-frontend/npm-debug.log*
+verifai-frontend/yarn-debug.log*
+verifai-frontend/pnpm-debug.log*
 
 # ---------------------------------------------------------
-# SECURITY & SECRETS (The most important part)
+# SECURITY KEY FILES
 # ---------------------------------------------------------
-# Block all .env files in any subdirectory
-**/.env
-**/.env.*
-
-# Exception: Allow the example file so teammates know what to fill in
-!**/.env.example
-
-# Block SSL keys if you generated them locally
 *.pem
 *.key
 *.crt

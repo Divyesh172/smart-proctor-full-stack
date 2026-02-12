@@ -3,13 +3,14 @@ from sqlalchemy.orm import Session
 from app.core.security import get_password_hash, verify_password
 from app.crud.base import CRUDBase
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.student import StudentCreate, StudentUpdate
+# Note: Using Student schemas as User schemas for this context
 
-class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
+class CRUDUser(CRUDBase[User, StudentCreate, StudentUpdate]):
     def get_by_email(self, db: Session, *, email: str) -> Optional[User]:
         return db.query(User).filter(User.email == email).first()
 
-    def create(self, db: Session, *, obj_in: UserCreate) -> User:
+    def create(self, db: Session, *, obj_in: StudentCreate) -> User:
         """
         Overrides the standard create to handle password hashing.
         """
@@ -18,6 +19,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
             hashed_password=get_password_hash(obj_in.password),
             full_name=obj_in.full_name,
             is_superuser=obj_in.is_superuser,
+            is_active=True
         )
         db.add(db_obj)
         db.commit()
@@ -29,7 +31,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
             db: Session,
             *,
             db_obj: User,
-            obj_in: Union[UserUpdate, Dict[str, Any]]
+            obj_in: Union[StudentUpdate, Dict[str, Any]]
     ) -> User:
         """
         Overrides update to check if the password field is being modified.

@@ -1,51 +1,69 @@
-# app/services/honeypot.py
+import logging
 import re
-from typing import Optional, List
+from typing import Optional
 from app.core.config import settings
 
-def verify_honeypot(hidden_field_value: Optional[str]) -> bool:
-    """
-    Checks if the 'invisible' form field was filled out.
+# Configure module-level logger
+logger = logging.getLogger(__name__)
 
-    Args:
-        hidden_field_value: The value from the 'phone_extension_secondary' field.
-
-    Returns:
-        True if bot detected (field has content), False if clean.
+class HoneypotService:
     """
-    # If the field has ANY content, it's a bot.
-    # Humans can't see this field because of CSS 'display: none'.
-    if hidden_field_value and len(hidden_field_value.strip()) > 0:
-        return True
-    return False
-
-def check_llm_poisoning(answer_text: str) -> bool:
+    Service responsible for detecting non-human actors and AI interference.
     """
-    Scans the answer for the specific trigger word we injected
-    into the prompt (e.g., 'Cyberdyne').
 
-    Returns:
-        True if the trigger word is found (Cheating detected).
-    """
-    if not answer_text:
+    @staticmethod
+    def verify_honeypot_field(hidden_field_value: Optional[str]) -> bool:
+        """
+        Checks if the 'invisible' CSS-hidden form field was filled out.
+        
+        Args:
+            hidden_field_value: The raw string from the 'phone_extension_secondary' field.
+            
+        Returns:
+            True if bot detected (field has content), False if clean.
+        """
+        # If the field is None, it might mean the frontend didn't send it.
+        # We treat None as 'Safe' (human didn't see it), but empty string "" is also safe.
+        # Any other content implies a bot filled it.
+        if hidden_field_value and len(hidden_field_value.strip()) > 0:
+            logger.warning(f"SECURITY EVENT: Honeypot field triggered. Value: '{hidden_field_value}'")
+            return True
         return False
 
-    # Case-insensitive check for the trap word
-    trap_word = settings.HONEYPOT_TRAP_WORD.lower()
-    return trap_word in answer_text.lower()
+    @staticmethod
+    def check_llm_poisoning(answer_text: str) -> bool:
+        """
+        Scans the answer for the specific trigger word injected into the 
+        student's question prompt (e.g., 'Cyberdyne', 'Project 2501').
+        
+        This detects if the student copied the invisible prompt text 
+        and pasted it into ChatGPT.
+        """
+        if not answer_text:
+            return False
 
-def check_watermark(question_text: str) -> Optional[int]:
-    """
-    Advanced: Scans for Zero-Width Characters (\u200B) to detect
-    if the question was copied from a specific student's screen.
+        trap_word = settings.HONEYPOT_TRAP_WORD.lower()
+        if trap_word in answer_text.lower():
+            logger.warning(f"SECURITY EVENT: AI Poisoning detected. Found trap word: '{trap_word}'")
+            return True
 
-    Returns:
-        Student ID (int) if a watermark is found, None otherwise.
-    """
-    # This regex looks for a sequence of Zero-Width Spaces
-    # In a real app, you'd decode binary from this.
-    # For the demo, we just check presence.
-    if "\u200B" in question_text:
-        # Mock decoding logic
-        return 12345
-    return None
+        return False
+
+    @staticmethod
+    def detect_watermark(text: str) -> Optional[int]:
+        """
+        Advanced: Scans for Zero-Width Characters (\u200B) to detect
+        if the text contains a hidden binary watermark.
+        
+        Used to track which student leaked the question.
+        """
+        # In a full implementation, you would decode the binary sequence 
+        # of zero-width spaces back into an Integer ID.
+        # For now, we detect the presence of the marker.
+        if "\u200B" in text:
+            logger.info("Watermark detected in submission text.")
+            return True
+        return False
+
+# Instantiate for easy import
+honeypot_service = HoneypotService()

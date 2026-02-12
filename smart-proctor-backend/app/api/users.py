@@ -1,5 +1,5 @@
-from typing import Any, List
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from typing import Any
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from pydantic.networks import EmailStr
 from sqlalchemy.orm import Session
@@ -10,22 +10,15 @@ from app.core.config import settings
 
 router = APIRouter()
 
-# ---------------------------------------------------------
-# 1. GET CURRENT USER PROFILE
-# ---------------------------------------------------------
 @router.get("/me", response_model=schemas.User)
 def read_user_me(
         current_user: models.User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Get current user.
-    Used by the Frontend to persist session state and show the 'Welcome, [Name]' banner.
+    Get current user profile.
     """
     return current_user
 
-# ---------------------------------------------------------
-# 2. UPDATE OWN PROFILE
-# ---------------------------------------------------------
 @router.put("/me", response_model=schemas.User)
 def update_user_me(
         *,
@@ -36,15 +29,13 @@ def update_user_me(
         current_user: models.User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Update own user.
+    Update own user profile.
     """
     current_user_data = jsonable_encoder(current_user)
     user_in = schemas.UserUpdate(**current_user_data)
 
-    # Check if email is being changed and if it is already taken
     if email is not None and email != current_user.email:
-        user = crud.user.get_by_email(db, email=email)
-        if user:
+        if crud.user.get_by_email(db, email=email):
             raise HTTPException(
                 status_code=409,
                 detail="This email is already associated with another account.",
@@ -60,9 +51,6 @@ def update_user_me(
     user = crud.user.update(db, db_obj=current_user, obj_in=user_in)
     return user
 
-# ---------------------------------------------------------
-# 3. PUBLIC REGISTRATION (SIGN UP)
-# ---------------------------------------------------------
 @router.post("/open", response_model=schemas.User)
 def create_user_open(
         *,
@@ -72,9 +60,9 @@ def create_user_open(
         full_name: str = Body(None),
 ) -> Any:
     """
-    Create new user without the need to be logged in.
+    Public registration endpoint.
     """
-    if not settings.USERS_OPEN_REGISTRATION:
+    if not settings.USERS_OPEN_REGISTRATION: # Ensure this is in config.py or default True
         raise HTTPException(
             status_code=403,
             detail="Open user registration is forbidden on this server",

@@ -5,38 +5,39 @@ from passlib.context import CryptContext
 from app.core.config import settings
 
 # ---------------------------------------------------------
-# 1. Password Hashing Engine
+# PASSWORD HASHING ENGINE
 # ---------------------------------------------------------
-# We use 'bcrypt' because it is resistant to GPU-based attacks.
-# 'deprecated="auto"' allows us to rotate hashes in the future
-# without breaking existing users.
+# "bcrypt" is the industry standard for password storage.
+# We set deprecated="auto" to allow seamless upgrades if we
+# change algorithms in the future (without locking users out).
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Verifies a plain-text password against the stored hash.
-    Used during the Login process (api/auth.py).
+    Used during the Login process.
     """
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password: str) -> str:
     """
     Generates a secure hash for storage in PostgreSQL.
-    Used during Student Registration.
+    Used during Registration.
     """
     return pwd_context.hash(password)
 
 # ---------------------------------------------------------
-# 2. JWT (JSON Web Token) Generation
+# JWT (JSON WEB TOKEN) FACTORY
 # ---------------------------------------------------------
 def create_access_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
     """
-    Creates a signed JWT that proves the student's identity.
+    Creates a signed JWT that proves the user's identity.
 
-    Payload Structure:
-    - sub (Subject): The Student ID or Email
-    - exp (Expiration): When this token dies (CRITICAL for security)
-    - type: Explicitly set to 'access' to prevent token confusion attacks
+    Payload Standard:
+    - sub (Subject): The User ID (Primary Key)
+    - exp (Expiration): Absolute timestamp when token dies
+    - type: Explicitly set to 'access' (prevents token confusion attacks)
+    - iss (Issuer): Helps frontend verify source
     """
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -47,13 +48,12 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
         "sub": str(subject),
         "exp": expire,
         "type": "access",
-        # Add 'iss' (Issuer) to verify it came from YOUR server
         "iss": settings.PROJECT_NAME
     }
 
-    # SIGNING:
-    # This is where the magic happens. We verify this signature
-    # in the Go WebSocket server using the same SECRET_KEY.
+    # SIGNING
+    # This uses the SECRET_KEY from .env. If this key leaks,
+    # all accounts are compromised. Keep it safe!
     encoded_jwt = jwt.encode(
         to_encode,
         settings.SECRET_KEY,
@@ -63,13 +63,12 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
     return encoded_jwt
 
 # ---------------------------------------------------------
-# 3. Token Decoding (Internal Verification)
+# TOKEN VALIDATOR (Internal Tool)
 # ---------------------------------------------------------
 def decode_access_token(token: str) -> dict:
     """
-    Decodes a token to check validity.
-    Used by your 'Brain' (Python) if it needs to verify a
-    request coming from the frontend or Go.
+    Decodes a token to inspect claims manually.
+    Useful for debugging or internal service-to-service checks.
     """
     try:
         payload = jwt.decode(
