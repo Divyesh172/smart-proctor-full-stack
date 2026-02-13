@@ -53,3 +53,7 @@ class ExamResult(BaseModel):
     status: str = Field(..., description="PASSED, FLAGGED, or REVIEW_REQUIRED")
     score: Optional[int] = 0
     security_remarks: Optional[str] = None
+
+class KeystrokeUpdate(BaseModel):
+    user_id: int
+    new_flight_time: float

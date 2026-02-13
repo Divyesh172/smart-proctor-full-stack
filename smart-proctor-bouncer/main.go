@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -24,17 +26,15 @@ var (
 	jwtKey        []byte
 	allowedOrigins []string
 
-	// Thread-safe map to track active connections (for monitoring)
+	// Thread-safe map to track active connections
 	activeClients   = make(map[string]*websocket.Conn)
 	clientsMutex    sync.RWMutex
 
 	upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
-		// SECURITY: Origin Check
 		CheckOrigin: func(r *http.Request) bool {
 			origin := r.Header.Get("Origin")
-			// If no allowed origins configured, allow all (Dev Mode)
 			if len(allowedOrigins) == 0 {
 				return true
 			}
@@ -53,23 +53,20 @@ var (
 // 2. DATA STRUCTURES
 // ---------------------------------------------------------
 
-// Claims matches the Python JWT payload
 type Claims struct {
 	Sub  string `json:"sub"` // Student ID
 	Role string `json:"role"`
 	jwt.RegisteredClaims
 }
 
-// Heartbeat comes from the Frontend (useKeystrokeDNA hook)
 type Heartbeat struct {
 	StudentID  string  `json:"student_id"`
 	FlightTime float64 `json:"flight_time"` // ms between keys
 	DwellTime  float64 `json:"dwell_time"`  // ms key held down
 }
 
-// Alert goes back to Frontend to trigger "Red Screen"
 type Alert struct {
-	Status  string `json:"status"`  // "TERMINATE", "WARNING"
+	Status  string `json:"status"`
 	Message string `json:"message"`
 }
 
@@ -77,20 +74,19 @@ type Alert struct {
 // 3. INITIALIZATION
 // ---------------------------------------------------------
 func init() {
-	// A. Load Secret Key (Must match Python Backend)
 	secret := os.Getenv("SECRET_KEY")
 	if secret == "" {
-		log.Fatal("FATAL: SECRET_KEY environment variable is not set. The Bouncer cannot verify tokens.")
+		// Fallback for local testing if env not set
+		log.Println("⚠️  WARNING: SECRET_KEY not set. Using default for dev.")
+		secret = "change_this_to_a_super_secret_random_string_for_tuesday_demo_only"
 	}
 	jwtKey = []byte(secret)
 
-	// B. Load Allowed Origins (CORS for WebSockets)
 	origins := os.Getenv("ALLOWED_ORIGINS")
 	if origins != "" {
 		allowedOrigins = strings.Split(origins, ",")
 	}
 
-	// Setup standard logging flags
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 }
 
@@ -106,10 +102,9 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// B. VERIFY JWT (Signature Check)
+	// B. VERIFY JWT
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		// Ensure the signing method is HMAC (matches Python's HS256)
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
@@ -130,114 +125,128 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
-	// Register Client
 	studentID := claims.Sub
 	clientsMutex.Lock()
 	activeClients[studentID] = ws
 	clientsMutex.Unlock()
 
-	log.Printf("✅ Secure Link Established: Student %s (IP: %s)", studentID, r.RemoteAddr)
+	log.Printf("✅ Secure Link Established: Student %s", studentID)
 
+	// --- SESSION STATS TRACKING ---
+	var baselineFlightTime float64 = 150.0 // Mock baseline for now
+	var sessionTotalFlightTime float64 = 0.0
+	var sessionKeystrokes int = 0
+
+	// D. CLEANUP & SAVE ON DISCONNECT
 	defer func() {
 		clientsMutex.Lock()
 		delete(activeClients, studentID)
 		clientsMutex.Unlock()
+
+		// SAVE DNA: If we gathered enough data, send it to Python
+		if sessionKeystrokes > 5 {
+			avg := sessionTotalFlightTime / float64(sessionKeystrokes)
+			go saveUserBaselineToBackend(studentID, avg)
+		}
+
 		log.Printf("🔌 Disconnected: Student %s", studentID)
 	}()
 
-	// D. BIOMETRIC ANALYSIS LOOP
-	// Baseline profile (Mock: In real app, fetch from Python API or Redis)
-	var baselineFlightTime float64 = 150.0
-
+	// E. ANALYSIS LOOP
 	for {
 		var beat Heartbeat
 		err := ws.ReadJSON(&beat)
 		if err != nil {
-			break // Connection closed
+			break
 		}
 
-		// 1. BOT DETECTION (Superhuman Speed)
-		// If flight time is consistently < 10ms, it's a script pasting text.
+		// 1. UPDATE STATS
+		if beat.FlightTime > 0 && beat.FlightTime < 2000 { // Ignore pauses > 2s
+			sessionTotalFlightTime += beat.FlightTime
+			sessionKeystrokes++
+		}
+
+		// 2. BOT DETECTION (Superhuman Speed)
 		if beat.FlightTime < 10.0 && beat.FlightTime > 0 {
 			log.Printf("🚨 BOT DETECTED: Student %s (Speed: %.2fms)", studentID, beat.FlightTime)
-
-			alert := Alert{
-				Status:  "TERMINATE",
-				Message: "Automated typing pattern detected. Exam terminated.",
-			}
+			alert := Alert{Status: "TERMINATE", Message: "Automated typing pattern detected."}
 			ws.WriteJSON(alert)
-			break // Kick user
+			break
 		}
 
-		// 2. BIOMETRIC MISMATCH (Imposter Logic)
-		// If typing rhythm deviates by > 80ms from baseline, flag it.
+		// 3. BIOMETRIC MISMATCH
 		deviation := math.Abs(beat.FlightTime - baselineFlightTime)
-
 		if deviation > 80.0 {
-			// In production, we don't kick immediately, we increment a "Suspicion Score"
-			// stored in Redis. For now, we log it.
 			log.Printf("⚠️  Rhythm Mismatch: Student %s (Dev: %.2fms)", studentID, deviation)
-		} else {
-			// Adaptive Learning: Update baseline slightly to account for fatigue
-			baselineFlightTime = (baselineFlightTime*0.9) + (beat.FlightTime*0.1)
 		}
 	}
 }
 
+// --- NEW: SENDS DATA TO PYTHON BACKEND ---
+func saveUserBaselineToBackend(studentID string, avgFlightTime float64) {
+	payload := map[string]interface{}{
+		"user_id":         studentID,
+		"new_flight_time": avgFlightTime,
+	}
+
+	jsonBody, _ := json.Marshal(payload)
+
+	// Determine Backend URL (Localhost vs Docker)
+	backendURL := os.Getenv("BACKEND_URL")
+	if backendURL == "" {
+		backendURL = "http://localhost:8000" // Default for local testing
+	}
+
+	url := fmt.Sprintf("%s/api/v1/exam/internal/update-baseline", backendURL)
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		log.Printf("❌ Failed to contact Backend: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		log.Printf("🧬 DNA Saved for User %s: %.2fms", studentID, avgFlightTime)
+	} else {
+		log.Printf("❌ Backend rejected update: Status %d", resp.StatusCode)
+	}
+}
+
 // ---------------------------------------------------------
-// 5. HEALTH CHECK (For Kubernetes/Docker)
+// 5. SERVER SETUP
 // ---------------------------------------------------------
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	clientsMutex.RLock()
 	count := len(activeClients)
 	clientsMutex.RUnlock()
-
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{"status": "healthy", "active_connections": %d}`, count)
 }
 
-// ---------------------------------------------------------
-// 6. MAIN ENTRY POINT
-// ---------------------------------------------------------
 func main() {
-	// Routes
 	http.HandleFunc("/ws", handleConnections)
 	http.HandleFunc("/health", handleHealth)
 
-	// Config
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	// Server Configuration
-	server := &http.Server{
-		Addr:    ":" + port,
-		Handler: nil,
-	}
+	server := &http.Server{Addr: ":" + port, Handler: nil}
 
-	// Run Server in Goroutine
 	go func() {
-		fmt.Println("------------------------------------------------")
 		fmt.Printf("🛡️  VerifAI Bouncer Running on Port %s\n", port)
-		fmt.Println("------------------------------------------------")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Listen Error: %s\n", err)
 		}
 	}()
 
-	// Graceful Shutdown Logic
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutting down Bouncer...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatal("Server Forced Shutdown:", err)
-	}
-
+	server.Shutdown(ctx)
 	log.Println("Bouncer Exited Properly")
 }

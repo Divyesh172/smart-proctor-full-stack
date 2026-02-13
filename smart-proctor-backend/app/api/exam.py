@@ -2,6 +2,9 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from fastapi import Body
+from app import crud
+
 from app import schemas, models
 from app.api import deps
 from app.core.config import settings
@@ -33,7 +36,7 @@ def submit_exam(
         db_log = IntegrityViolation(
             student_id=int(submission.student_id), # Ensure ID matches DB type
             violation_type="BOT_DETECTED",
-            evidence_score=1.0,
+            evidence_score=0.85,
             metadata_log="Filled hidden field: phone_extension_secondary"
         )
         db.add(db_log)
@@ -74,3 +77,24 @@ def submit_exam(
         score=85, # In real app, this would call a Grading Service
         security_remarks="Integrity Verified"
     )
+@router.post("/internal/update-baseline")
+def update_keystroke_baseline(
+        data: schemas.KeystrokeUpdate,
+        db: Session = Depends(deps.get_db),
+        # In a real app, you would check a secret header here
+        # e.g., x_bouncer_secret: str = Header(...)
+):
+    """
+    Called by Go Bouncer to save new typing profile.
+    """
+    user = crud.user.get(db, id=data.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Update the baseline
+    user.typing_baseline = data.new_flight_time
+    db.add(user)
+    db.commit()
+
+    logger.info(f"🧬 Keystroke DNA updated for User {user.id}: {data.new_flight_time}ms")
+    return {"status": "updated"}

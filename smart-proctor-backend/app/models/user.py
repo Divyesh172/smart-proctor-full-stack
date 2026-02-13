@@ -1,5 +1,7 @@
-from sqlalchemy import Boolean, Column, Integer, String
+# Add Float here
+from sqlalchemy import Boolean, Column, Integer, String, Float
 from sqlalchemy.orm import relationship
+
 
 # We import 'Base' from app.db.base_class
 # This class automatically handles __tablename__ generation
@@ -27,6 +29,7 @@ class User(Base):
     # Soft Delete / Ban flags
     is_active = Column(Boolean(), default=True)
     is_superuser = Column(Boolean(), default=False)
+    typing_baseline = Column(Float, nullable=True)
 
     # ---------------------------------------------------------
     # RELATIONSHIPS

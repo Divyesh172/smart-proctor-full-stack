@@ -1,6 +1,7 @@
 from .token import Token, TokenPayload
 from .student import Student, StudentCreate, StudentUpdate
-from .exam import ExamSubmission, ExamResult, IntegrityLog, IntegrityCreate, IntegrityUpdate
+# ADD KeystrokeUpdate to the end of this list 👇
+from .exam import ExamSubmission, ExamResult, IntegrityLog, IntegrityCreate, IntegrityUpdate, KeystrokeUpdate
 
 # ---------------------------------------------------------
 # ALIASES (CRITICAL FIX)
