@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # -----------------------------------------------------------------
+  # 1. DATABASE (PostgreSQL 17)
+  # -----------------------------------------------------------------
+  db:
+    image: postgres:17
+    container_name: verifai-db
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=secure_db_password_123
+      - POSTGRES_DB=verifai_db
+    ports:
+      # Maps container port 5432 to host port 5435 to avoid conflicts
+      # with your local Postgres installations.
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - verifai-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # -----------------------------------------------------------------
+  # 2. BACKEND (Python FastAPI)
+  # -----------------------------------------------------------------
+  backend:
+    build: ./smart-proctor-backend
+    container_name: verifai-backend
+    command: /start.sh
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # Hot-reloading: Syncs your local code changes into the container
+      - ./smart-proctor-backend:/app
+    environment:
+      - PROJECT_NAME=VerifAI Enterprise
+      - POSTGRES_SERVER=db  # Uses the service name defined above!
+      - POSTGRES_PORT=5432  # Internal port is always 5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=secure_db_password_123
+      - POSTGRES_DB=verifai_db
+      - SECRET_KEY=change_this_to_a_super_secret_random_string_for_tuesday_demo_only
+      - ACCESS_TOKEN_EXPIRE_MINUTES=10080
+      - BACKEND_CORS_ORIGINS=["http://localhost:3000","http://localhost:8080"]
+      - GO_BOUNCER_URL=http://bouncer:8080
+    ports:
+      - "8000:8000"
+    networks:
+      - verifai-net
+
+  # -----------------------------------------------------------------
+  # 3. BOUNCER (Go WebSocket Service)
+  # -----------------------------------------------------------------
+  bouncer:
+    build: ./smart-proctor-bouncer
+    container_name: verifai-bouncer
+    restart: always
+    environment:
+      # Must match the backend's SECRET_KEY exactly
+      - SECRET_KEY=change_this_to_a_super_secret_random_string_for_tuesday_demo_only
+      - PORT=8080
+    ports:
+      - "8080:8080"
+    networks:
+      - verifai-net
+
+  # -----------------------------------------------------------------
+  # 4. PGADMIN (Database GUI - Optional)
+  # -----------------------------------------------------------------
+  # Access at http://localhost:5050
+  # Login: admin@verifai.com / root
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: verifai-pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@verifai.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+    networks:
+      - verifai-net
+
+volumes:
+  postgres_data:
+
+networks:
+  verifai-net:
+    driver: bridge
