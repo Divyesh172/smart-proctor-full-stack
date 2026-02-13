@@ -7,8 +7,6 @@ from app.core.config import settings
 from app.api import api_router
 
 # Setup standard Python logging
-# In production, this pipes logs to your container's stdout, 
-# which tools like Datadog or CloudWatch can pick up.
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -27,14 +25,10 @@ async def lifespan(app: FastAPI):
     logger.info(f"🌍 Environment: Production")
     logger.info(f"🔗 Go Bouncer URL: {settings.GO_BOUNCER_URL}")
 
-    # Optional: You could check Redis or DB connection health here
-    # to fail fast if infrastructure is missing.
-
     yield  # The application serves requests here
 
     # SHUTDOWN LOGIC
     logger.info(f"🛑 Shutting down {settings.PROJECT_NAME}...")
-    # Clean up resources (e.g., close HTTP client sessions) if needed.
 
 # ---------------------------------------------------------
 # APP INITIALIZATION
@@ -50,18 +44,23 @@ app = FastAPI(
 )
 
 # ---------------------------------------------------------
-# SECURITY: CORS MIDDLEWARE
+# SECURITY: CORS MIDDLEWARE (THE FIX)
 # ---------------------------------------------------------
-# This allows your Next.js frontend (running on Vercel/Localhost)
-# to communicate with this backend.
-if settings.BACKEND_CORS_ORIGINS:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# We explicitly allow localhost ports to prevent CORS blocking.
+origins = [
+    "http://localhost:3000",    # Next.js Frontend
+    "http://127.0.0.1:3000",    # Alternative Localhost
+    "http://localhost:8080",    # Go Bouncer
+    "http://127.0.0.1:8080",    # Alternative Bouncer
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ---------------------------------------------------------
 # ROUTING
@@ -75,7 +74,7 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 @app.get("/", tags=["System Status"])
 def health_check():
     """
-    Simple heartbeat endpoint for load balancers (AWS ALB / Nginx).
+    Simple heartbeat endpoint for load balancers.
     """
     return {
         "status": "operational",
@@ -84,7 +83,6 @@ def health_check():
         "documentation": "/docs"
     }
 
-# For debugging in VS Code directly (Optional)
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
