@@ -11,4 +11,6 @@ class Base:
     # This saves you from typing __tablename__ = "x" in every single model
     @declared_attr
     def __tablename__(cls) -> str:
-        return cls.__name__.lower()
+    # This turns User -> users and IntegrityViolation -> integrityviolations
+    # (Or just return cls.__name__.lower() + "s")
+        return cls.__name__.lower() + "s"
