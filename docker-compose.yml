@@ -9,13 +9,11 @@ services:
     container_name: verifai-db
     restart: always
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=secure_db_password_123
-      - POSTGRES_DB=verifai_db
-    ports:
-      # Maps container port 5432 to host port 5435 to avoid conflicts
-      # with your local Postgres installations.
-      - "5435:5432"
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    # SECURITY FIX: Ports removed. Database is now only accessible
+    # internally by the backend, not from the public internet.
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -32,24 +30,23 @@ services:
   backend:
     build: ./smart-proctor-backend
     container_name: verifai-backend
-    command: /start.sh
+    # OPTIMIZATION: Run with production settings (no reload)
+    command: bash start.sh
     restart: always
     depends_on:
       db:
         condition: service_healthy
-    volumes:
-      # Hot-reloading: Syncs your local code changes into the container
-      - ./smart-proctor-backend:/app
     environment:
       - PROJECT_NAME=VerifAI Enterprise
-      - POSTGRES_SERVER=db  # Uses the service name defined above!
-      - POSTGRES_PORT=5432  # Internal port is always 5432
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=secure_db_password_123
-      - POSTGRES_DB=verifai_db
-      - SECRET_KEY=change_this_to_a_super_secret_random_string_for_tuesday_demo_only
-      - ACCESS_TOKEN_EXPIRE_MINUTES=10080
-      - BACKEND_CORS_ORIGINS=["http://localhost:3000","http://localhost:8080"]
+      - POSTGRES_SERVER=db
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - SECRET_KEY=${SECRET_KEY}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+      # Allow frontend domain
+      - BACKEND_CORS_ORIGINS=["https://${DOMAIN}", "http://localhost:3000"]
       - GO_BOUNCER_URL=http://bouncer:8080
     ports:
       - "8000:8000"
@@ -64,30 +61,13 @@ services:
     container_name: verifai-bouncer
     restart: always
     environment:
-      # Must match the backend's SECRET_KEY exactly
-      - SECRET_KEY=change_this_to_a_super_secret_random_string_for_tuesday_demo_only
+      - SECRET_KEY=${SECRET_KEY}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - PORT=8080
+      - BACKEND_URL=http://backend:8000
+      - ALLOWED_ORIGINS=https://${DOMAIN},http://localhost:3000
     ports:
       - "8080:8080"
-    networks:
-      - verifai-net
-
-  # -----------------------------------------------------------------
-  # 4. PGADMIN (Database GUI - Optional)
-  # -----------------------------------------------------------------
-  # Access at http://localhost:5050
-  # Login: admin@verifai.com / root
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: verifai-pgadmin
-    restart: always
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@verifai.com
-      PGADMIN_DEFAULT_PASSWORD: root
-    ports:
-      - "5050:80"
-    depends_on:
-      - db
     networks:
       - verifai-net
 

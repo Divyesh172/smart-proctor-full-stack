@@ -176,11 +176,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		// 3. BIOMETRIC MISMATCH
 		if beat.FlightTime < 2000 {
-                    deviation := math.Abs(beat.FlightTime - baselineFlightTime)
-                    if deviation > 80.0 {
-                        log.Printf("⚠️  Rhythm Mismatch: Student %s (Dev: %.2fms)", studentID, deviation)
-        }
-    }
+			deviation := math.Abs(beat.FlightTime - baselineFlightTime)
+			if deviation > 80.0 {
+				log.Printf("⚠️  Rhythm Mismatch: Student %s (Dev: %.2fms)", studentID, deviation)
+			}
+		}
+	} // <--- [FIX] Closing brace for "for" loop
+} // <--- [FIX] Closing brace for "handleConnections" function
 
 // --- NEW: SENDS DATA TO PYTHON BACKEND ---
 func saveUserBaselineToBackend(studentID string, avgFlightTime float64) {

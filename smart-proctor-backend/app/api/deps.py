@@ -1,5 +1,5 @@
-from typing import Generator
-from fastapi import Depends, HTTPException, status
+from typing import Generator, Optional
+from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from pydantic import ValidationError
@@ -63,3 +63,16 @@ def get_current_active_superuser(
             status_code=400, detail="The user doesn't have enough privileges"
         )
     return current_user
+
+# --- INTERNAL MICROSERVICE SECURITY ---
+async def verify_internal_key(x_internal_key: Optional[str] = Header(None)):
+    """
+    Validates that the request is coming from a trusted internal service
+    (like the Go Bouncer) and not the public internet.
+    """
+    if x_internal_key != settings.INTERNAL_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Could not validate credentials"
+        )
+    return x_internal_key
